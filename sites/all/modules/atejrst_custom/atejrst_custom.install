@@ -1,0 +1,11 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function atejrst_custom_install() {
+  db_update('block')
+    ->fields(array('region' => -1))
+    ->condition('delta', 'main', '!=')
+    ->execute();
+}
