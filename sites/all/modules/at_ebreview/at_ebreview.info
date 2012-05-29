@@ -6,7 +6,6 @@ dependencies[] = relation
 dependencies[] = token
 dependencies[] = mimemail
 dependencies[] = views
-dependencies[] = views_bulk_operations
 
 ; Views handlers
 files[] = includes/views/at_ebreview_handler_field_delete_relation.inc
