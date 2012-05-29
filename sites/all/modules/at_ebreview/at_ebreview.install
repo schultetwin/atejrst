@@ -1,0 +1,100 @@
+<?php
+
+/**
+ * Implements hook_enable().
+ */
+function at_ebreview_enable() {
+  mailsystem_set(array('at_ebreview' => 'MimeMailSystem'));
+}
+
+/**
+ * Implements hook_install().
+ */
+function at_ebreview_install() {
+  at_ebreview_fields();
+}
+
+
+/**
+ * Implements hook_disable().
+ */
+function at_ebreview_disable() {
+  mailsystem_clear(array('at_ebreview' => 'MimeMailSystem'));
+}
+
+/**
+ * Implements hook_update(). 
+ */
+function at_ebreview_update_7001(&$sandbox) {
+  at_ebreview_fields();
+}
+
+function at_ebreview_fields() {
+  $field = array(
+    'field_name' => 'field_eb_review_status',
+    'type' => 'list_text',
+    'cardinality' => 1,
+    'settings' => array(
+      'allowed_values' => array(
+        'waiting' => t('Waiting for Reviewer Response'),
+        'responded' => t('Reviewer Provided Review'),
+        'denied' => t('Review Denied Request'),
+      ),
+    ),
+    'storage' => array(
+      'type' => 'field_sql_storage',
+      'settings' => array(),
+      'module' => 'field_sql_storage',
+      'active' => 1,
+      'details' => array(
+        'sql' => array(
+          FIELD_LOAD_CURRENT => array(
+            'field_data_field_eb_review_status' => array(
+              'value' => 'field_eb_review_status_value',
+            ),
+          ),
+          FIELD_LOAD_REVISION => array(
+            'field_revision_field_eb_review_status' => array(
+              'value' => 'field_eb_review_status_value',
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  field_create_field($field);
+
+  $instance = array (
+    'field_name' => 'field_eb_review_status',
+    'entity_type' => 'relation',
+    'bundle' => 'eb_reviewer',
+    'label' => 'Status',
+    'widget' => array (
+      'weight' => '1',
+      'type' => 'options_select',
+      'module' => 'options',
+      'active' => 1,
+      'settings' => array (),
+    ),
+    'settings' => array (
+      'user_register_form' => false,
+    ),
+    'display' => array (
+      'default' => array (
+        'label' => 'above',
+        'type' => 'list_default',
+        'settings' => array (),
+        'module' => 'list',
+        'weight' => 1,
+      ),
+    ),
+    'required' => 1,
+    'description' => 'Select the status of this review so that we know when to assign new reviewers',
+    'default_value' => array (
+      0 => array (
+        'value' => 'waiting',
+      ),
+    ),
+  );
+  field_create_instance($instance);
+}

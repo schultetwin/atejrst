@@ -1,0 +1,380 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function at_ebreview_menu() {
+  $items['node/%node/assign_eb_reviewer'] = array(
+    'title' => 'Assign EB Reviewer',
+    'page callback' => 'at_ebreview_node_page',
+    'page arguments' => array(1),
+    'access callback' => 'at_ebreview_assign_reviewer',
+    'access arguments' => array(1),
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  $items['admin/config/people/atebreview_config'] = array(
+    'title' => 'Administer At EB Review',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('at_ebreview_admin_form'),
+    'access arguments' => array('administer at ebreview'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function at_ebreview_permission() {
+  return array(
+    'at_ebreview_assign_reviewer' => array(
+      'title' => t('Assign Reviewer to Manuscript'),
+      'description' => t('Allows user to assign another user to a manuscript as well as see who was previously assigned'),
+    ),
+    'administer at ebreview' => array(
+      'title' => t('Administer EB Reviewer Assign'),
+      'description' => t('Change EB Reviewever admin level details'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function at_ebreview_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'at_ebreview') . '/includes/views',
+  );
+}
+
+/**
+ * Implements hook_ctools_plugin_api().
+ */
+function at_ebreview_ctools_plugin_api($owner, $api) {
+  if ($owner == 'relation' && $api == 'relation_type_default') {
+    return array('version' => 1);
+  }
+}
+
+/**
+ * Access callback for page
+ */
+function at_ebreview_assign_reviewer($node) {
+  if ($node->type != 'manuscript') return FALSE;
+  if (!user_access('at_ebreview_assign_reviewer')) return FALSE;
+  return TRUE;
+}
+
+/**
+ * Page callback for assigning reviewer to node
+ */
+function at_ebreview_node_page($node) {
+  $exclude = array();
+  $results = views_get_view_result('eb_reviewers_for_node', 'default', $node->nid);
+  foreach ($results as $result) {
+    $exclude[] = $result->users_relation_1_uid;
+  }
+  $form = drupal_get_form('at_ebreview_assign_reviewer_form', $node, $exclude);
+  $view = views_embed_view('eb_reviewers_for_node', 'default', $node->nid);
+  $result = array(
+    array(
+      '#markup' => drupal_render($form),
+    ),
+    array(
+      '#markup' => $view,
+    ),
+  );
+  return $result;
+}
+
+/**
+ * Form to send eb_reviewer invite for manuscript
+ */
+function at_ebreview_assign_reviewer_form($form, &$form_state, $node, $users_exclude) {
+  $form['#node'] = $node;
+  $form['users'] = array(
+    '#type' => 'select',
+    '#title' => t('Assign Reviewers'),
+    '#multiple' => TRUE,
+    '#options' => _at_ebreview_user_options($users_exclude),
+  );
+
+  $form['email_template'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Email Template')
+  );
+  $form['email_template']['email_from'] = array(
+    '#type' => 'textfield',
+    '#title' => t('From Email Address'),
+    '#description' => t('Select the e-mail address this should be from'),
+    '#default_value' => variable_get('at_ebreviwer_email_from', variable_get('site_mail', '')),
+    '#required' => TRUE,
+  );
+    $form['email_template']['email_subject'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Subject'),
+    '#description' => t('Enter the email subject'),
+    '#default_value' => variable_get('at_ebreviwer_email_subject', ''),
+    '#required' => TRUE,
+  );
+  $form['email_template']['email_template'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Email Template Text'),
+    '#default_value' => variable_get('at_ebreviewer_email_template', ''),
+    '#description' => t('Type the email template and replace it with the tokens below'),
+  );
+  $form['email_template']['tokens'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Replacement Patterns'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['email_template']['tokens']['tokens'] = array(
+    '#theme' => 'token_tree',
+    '#token_types' => array('node', 'user'),
+    '#global_types' => TRUE,
+    '#click_insert' => TRUE,
+  );
+  $form['email_template']['attachment'] = array(
+    '#type' => 'managed_file',
+    '#title' => t('Manuscript'),
+    '#description' => t('Upload a copy of the manuscript here to send to EB reviewer'),
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Send Email(s)'),
+  );
+
+  return $form;
+}
+
+/**
+ * Form submit handler
+ */
+function at_ebreview_assign_reviewer_form_submit($form, &$form_state) {
+  $node = $form['#node'];
+
+  $attachment = $form['email_template']['attachment']['#file'];
+  $message = array();
+  $attachments[] = array(
+    'filepath' => $attachment->uri,
+    'filename' => $attachment->filename,
+    'filemime' => $attachment->filemime,
+    'list' => TRUE
+  );
+
+  $count = 0;
+  
+  foreach ($form_state['values']['users'] as $uid) {
+    $account = user_load($uid);
+    $relation_params = array(
+      array('entity_type' => 'node', 'entity_id' => $node->nid), array('entity_type' => 'user', 'entity_id' => $account->uid)
+    );
+
+    $relation = relation_create(variable_get('at_eb_review_relation_type', 'eb_reviewer'), $relation_params);
+    relation_save($relation);
+
+    $context = array('user' => $account, 'node' => $node);
+    $message = array(
+      'to' => $account->mail,
+      'from' => $form_state['values']['email_from'],
+      'params' => array(
+        'plain' => TRUE,
+      ),
+      'headers' => array(
+        'MIME-Version'              => '1.0',
+        'Content-Type'              => 'text/plain; charset=UTF-8; format=flowed; delsp=yes',
+        'Content-Transfer-Encoding' => '8Bit',
+        'X-Mailer'                  => 'Drupal',
+        'From'                      => $form_state['values']['email_from'],
+      ),
+    );
+
+    $params = array(
+      'context' => array(
+        'body' => $form_state['values']['email_template'],
+        'subject' => $form_state['values']['email_subject'],
+      ),
+      'from' => $form_state['values']['email_from'],
+      'attachments' => '',
+      'plaintext' => $form_state['values']['email_template'],
+    );
+    if (at_ebreview_mail_custom($message, $params, $context, $attachments)) $count++;
+
+    unset($account);
+  }
+  drupal_set_message(t('Successfully sent %num emails to invite reviewres', array('%num' => $count)));
+}
+
+/**
+ * Wrapper for mimemail email.
+ * @param array() $message
+ *   ['to'] Who the message is to
+ *   ['headers'] array of headers
+ *   ['params'] array
+ *     ['plain'] Send plain text or not
+ * @param array() $params
+ *   ['context'] array()
+ *     ['body'] array() Body of email
+ *     ['subject'] Subject of email
+ *   ['from'] Who the message is from
+ *   ['cc'] array Of cc recepients
+ *   ['bcc'] array of bcc recepients
+ *   ['plaintext'] The plain text to send
+ * @param array() $context
+ * @param attachments (to be added later)
+ */
+function at_ebreview_mail_custom($message, $params, $context, $attachments) {
+  // First call mimemail_mail() directly
+  $params['context'] += $context;
+  mimemail_mail('null', $message, $params);
+  $message['params']['attachments'] += $attachments;
+  $message['key'] = 'test';
+  $message['from'] =
+
+  $system = drupal_mail_system('at_ebreview', microtime());
+  $message = $system->format($message);
+  return $system->mail($message);
+}
+
+/**
+ * Admin form callback
+ */
+function at_ebreview_admin_form($form, &$form_state) {
+  $form['at_ebreviewer_roles'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('EB Reviewer Roles'),
+    '#description' => t('Select which roles are selectable for eb reviewers'),
+    '#default_value' => variable_get('at_ebreviewer_roles', array()),
+    '#options' => user_roles(),
+  );
+
+  $form['at_eb_review_relation_type'] = array(
+    '#type' => 'select',
+    '#title' => t('Relation Type'),
+    '#description' => t('Select the relation type to use'),
+    '#default_value' => variable_get('at_eb_review_relation_type', 'eb_reviewer'),
+    '#options' => _at_ebreview_get_relation_types(),
+  );
+
+  $form['at_ebreviewer_email_template'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Email Template')
+  );
+  $form['at_ebreviewer_email_template']['at_ebreviwer_email_from'] = array(
+    '#type' => 'textfield',
+    '#title' => t('From Email Address'),
+    '#description' => t('Select the e-mail address this should be from'),
+    '#default_value' => variable_get('at_ebreviwer_email_from', variable_get('site_mail', '')),
+    '#required' => TRUE,
+  );
+  $form['at_ebreviewer_email_template']['at_ebreviwer_email_subject'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Subject'),
+    '#description' => t('Enter the default subject'),
+    '#default_value' => variable_get('at_ebreviwer_email_subject', ''),
+    '#required' => TRUE,
+  );
+  $form['at_ebreviewer_email_template']['at_ebreviewer_email_template'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Email Template Text'),
+    '#default_value' => variable_get('at_ebreviewer_email_template', ''),
+    '#description' => t('Type the email template and replace it with the tokens below'),
+  );
+  $form['at_ebreviewer_email_template']['tokens'] = array(
+    '#theme' => 'token_tree',
+    '#token_types' => array('node', 'user'),
+    '#global_types' => TRUE,
+    '#click_insert' => TRUE,
+  );
+
+  return system_settings_form($form);
+}
+
+/**
+ * Selectable users
+ */
+function _at_ebreview_user_options($exclude = array()) {
+  $users = array();
+  $roles = variable_get('at_ebreviewer_roles', array());
+  $query = db_select('users', 'u');
+  $query->fields('u', array('uid', 'name'));
+  $query->join('users_roles', 'ur', 'u.uid = ur.uid');
+  $query->condition('ur.rid', array_filter(array_values($roles)), 'IN');
+  $results = $query->execute()->fetchAll();
+  foreach ($results as $result) {
+    $users[$result->uid] = $result->name;
+  }
+  foreach ($exclude as $ex) {
+    unset($users[$ex]);
+  }
+
+  return $users;
+}
+
+function _at_ebreview_get_relation_types() {
+  $return = array();
+  $types = relation_get_types();
+  foreach ($types as $name => $type) {
+    $return[$name] = $type->label;
+  }
+
+  return $return;
+}
+
+/**
+ * Ajax callback for view form
+ */
+function at_ebreview_ajax_change_status($form, &$form_state) {
+  $ajax = FALSE;
+  if (isset($form_state['triggering_element']['#ajax'])) {
+    $ajax_ref = &$form_state['triggering_element']['#ajax'];
+    if (isset($ajax_ref['custom']) && isset($ajax_ref['custom']['rid'])) {
+      $ajax = TRUE;
+      $value = drupal_array_get_nested_value($form_state['values'], $form_state['triggering_element']['#array_parents']);
+      $relations = array(array(
+        'rid' => $ajax_ref['custom']['rid'],
+        'status' => $value,
+        'field_name' => $ajax_ref['custom']['field'],
+      ));
+    }
+  }
+  if (!$ajax) {
+    $relations = $form_state['values']['status_form'];
+  }
+  foreach ($relations as $relation) {
+    $entity = relation_load($relation['rid']);
+    $entity->{$relation['field_name']}[LANGUAGE_NONE][0]['value'] = $relation['status'];
+    relation_save($entity);
+  }
+  if ($ajax) {
+    return $form;
+  }
+}
+
+function at_ebreview_relation_default_relation_types() {
+  $relation_types = array();
+
+  $relation_type = new stdClass();
+  $relation_type->disabled = FALSE; /* Edit this to true to make a default relation_type disabled initially */
+  $relation_type->api_version = 1;
+  $relation_type->relation_type = 'eb_reviewer';
+  $relation_type->label = 'EB Reviewer';
+  $relation_type->reverse_label = 'EB Reviewer';
+  $relation_type->directional = 1;
+  $relation_type->transitive = 0;
+  $relation_type->r_unique = 1;
+  $relation_type->min_arity = 2;
+  $relation_type->max_arity = 2;
+  $relation_type->source_bundles = array(
+    0 => 'node:manuscript',
+  );
+  $relation_type->target_bundles = array(
+    0 => 'user:user',
+  );
+  $relation_types['eb_reviewer'] = $relation_type;
+
+  return $relation_types;
+}
