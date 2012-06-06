@@ -8,7 +8,9 @@ function atejrst_custom_install() {
     ->fields(array('region' => -1))
     ->condition('delta', 'main', '!=')
     ->execute();
-  module_enable(array('at_ebreview'));
+  module_enable(array('at_ebreview', 'ctools', 'relation', 'mimemail', 'mailsystem'));
+  drupal_flush_all_caches();
+  module_enable(array('at_eb_reviewer', 'at_manuscript'));
 }
 
 /**
@@ -16,4 +18,12 @@ function atejrst_custom_install() {
  */
 function atejrst_custom_update_7001(&$sandbox) {
   module_enable(array('at_ebreview'));
+}
+
+/**
+ * Enable first features
+ */
+function atejrst_custom_update_7002(&$sandbox) {
+  drupal_flush_all_caches();
+  module_enable(array('at_eb_reviewer', 'at_manuscript'));
 }

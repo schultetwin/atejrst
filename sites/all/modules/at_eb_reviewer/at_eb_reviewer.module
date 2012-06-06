@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the AT EB Reviewer feature.
+ */
+
+include_once 'at_eb_reviewer.features.inc';

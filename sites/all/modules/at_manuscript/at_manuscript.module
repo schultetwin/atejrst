@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the AT Manuscript feature.
+ */
+
+include_once 'at_manuscript.features.inc';

@@ -24,15 +24,17 @@ class at_ebreview_handler_status_form extends views_handler_field {
   function options_form(&$form, &$form_state) {
     parent::options_form($form, $form_state);
 
-    $instances = field_info_instances('relation', 'eb_reviewer');
+    $instances = field_info_instances('relation', 'eb_reviewers');
     foreach ($instances as $instance) {
       $field = field_info_field($instance['field_name']);
       if ($field['module'] == 'list') $fields[$instance['field_name']] = $instance['label'];
     }
     $form['status_field'] = array(
+      '#title' => t('Field to edit'),
       '#type' => 'select',
       '#options' => $fields,
       '#default_value' => isset($this->options['field']) ? $this->options['field'] : '',
+      '#required' => TRUE,
     );
   }
   function render($values) {
@@ -78,12 +80,12 @@ class at_ebreview_handler_status_form extends views_handler_field {
           'callback' => 'at_ebreview_ajax_change_status',
           'wrapper' => 'at-ebreview-ajax-change',
           'custom' => array(
-            'rid' => $row->rid,
+            'rid' => $row->{$this->aliases['rid']},
             'field' => $this->options['status_field'],
           ),
         ),
       );
-      $form[$field_name][$form_element_row_id]['rid'] = array('#type' => 'value', '#value' => $row->rid);
+      $form[$field_name][$form_element_row_id]['rid'] = array('#type' => 'value', '#value' => $row->{$this->aliases['rid']});
       $form[$field_name][$form_element_row_id]['field_name'] = array('#type' => 'value', '#value' => $this->options['status_field']);
     }
   }

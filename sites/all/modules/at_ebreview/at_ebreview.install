@@ -11,7 +11,6 @@ function at_ebreview_enable() {
  * Implements hook_install().
  */
 function at_ebreview_install() {
-  at_ebreview_fields();
 }
 
 
@@ -26,7 +25,6 @@ function at_ebreview_disable() {
  * Implements hook_update(). 
  */
 function at_ebreview_update_7001(&$sandbox) {
-  at_ebreview_fields();
 }
 
 function at_ebreview_fields() {

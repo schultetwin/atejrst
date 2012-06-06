@@ -50,15 +50,6 @@ function at_ebreview_views_api() {
 }
 
 /**
- * Implements hook_ctools_plugin_api().
- */
-function at_ebreview_ctools_plugin_api($owner, $api) {
-  if ($owner == 'relation' && $api == 'relation_type_default') {
-    return array('version' => 1);
-  }
-}
-
-/**
  * Access callback for page
  */
 function at_ebreview_assign_reviewer($node) {
@@ -72,12 +63,12 @@ function at_ebreview_assign_reviewer($node) {
  */
 function at_ebreview_node_page($node) {
   $exclude = array();
-  $results = views_get_view_result('eb_reviewers_for_node', 'default', $node->nid);
+  $results = views_get_view_result('reviewers_for_manuscript', 'default', $node->nid);
   foreach ($results as $result) {
-    $exclude[] = $result->users_relation_1_uid;
+    $exclude[] = $result->users_relation_uid;
   }
   $form = drupal_get_form('at_ebreview_assign_reviewer_form', $node, $exclude);
-  $view = views_embed_view('eb_reviewers_for_node', 'default', $node->nid);
+  $view = views_embed_view('reviewers_for_manuscript', 'default', $node->nid);
   $result = array(
     array(
       '#markup' => drupal_render($form),
@@ -180,7 +171,7 @@ function at_ebreview_assign_reviewer_form_submit($form, &$form_state) {
       array('entity_type' => 'node', 'entity_id' => $node->nid), array('entity_type' => 'user', 'entity_id' => $account->uid)
     );
 
-    $relation = relation_create(variable_get('at_eb_review_relation_type', 'eb_reviewer'), $relation_params);
+    $relation = relation_create(variable_get('at_eb_review_relation_type', 'eb_reviewers'), $relation_params);
     relation_save($relation);
 
     $context = array('user' => $account, 'node' => $node);
@@ -274,7 +265,7 @@ function at_ebreview_admin_form($form, &$form_state) {
     '#type' => 'select',
     '#title' => t('Relation Type'),
     '#description' => t('Select the relation type to use'),
-    '#default_value' => variable_get('at_eb_review_relation_type', 'eb_reviewer'),
+    '#default_value' => variable_get('at_eb_review_relation_type', 'eb_reviewers'),
     '#options' => _at_ebreview_get_relation_types(),
   );
 
@@ -371,29 +362,4 @@ function at_ebreview_ajax_change_status($form, &$form_state) {
   if ($ajax) {
     return $form;
   }
-}
-
-function at_ebreview_relation_default_relation_types() {
-  $relation_types = array();
-
-  $relation_type = new stdClass();
-  $relation_type->disabled = FALSE; /* Edit this to true to make a default relation_type disabled initially */
-  $relation_type->api_version = 1;
-  $relation_type->relation_type = 'eb_reviewer';
-  $relation_type->label = 'EB Reviewer';
-  $relation_type->reverse_label = 'EB Reviewer';
-  $relation_type->directional = 1;
-  $relation_type->transitive = 0;
-  $relation_type->r_unique = 1;
-  $relation_type->min_arity = 2;
-  $relation_type->max_arity = 2;
-  $relation_type->source_bundles = array(
-    0 => 'node:manuscript',
-  );
-  $relation_type->target_bundles = array(
-    0 => 'user:user',
-  );
-  $relation_types['eb_reviewer'] = $relation_type;
-
-  return $relation_types;
 }
