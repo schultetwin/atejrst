@@ -156,16 +156,23 @@ function at_ebreview_assign_reviewer_form($form, &$form_state, $node, $users_exc
 function at_ebreview_assign_reviewer_form_submit($form, &$form_state) {
   $node = $form['#node'];
 
-  $attachment = $form['email_template']['attachment']['#file'];
+  if (isset($form['email_template']['attachment']['#file'])) {
+    $attachment = $form['email_template']['attachment']['#file'];
+  }
   $message = array();
-  $attachments[] = array(
-    'filepath' => $attachment->uri,
-    'filename' => $attachment->filename,
-    'filemime' => $attachment->filemime,
-    'list' => TRUE
-  );
+  $attachments = array();
+  if (is_object($attachment)) {
+    $attachments[] = array(
+      'filepath' => $attachment->uri,
+      'filename' => $attachment->filename,
+      'filemime' => $attachment->filemime,
+      'list' => TRUE
+    );
+  }
 
   $count = 0;
+  $success = array();
+  $failure = array();
   
   foreach ($form_state['values']['users'] as $uid) {
     $account = user_load($uid);
@@ -201,11 +208,23 @@ function at_ebreview_assign_reviewer_form_submit($form, &$form_state) {
       'attachments' => '',
       'plaintext' => $form_state['values']['email_template'],
     );
-    if (at_ebreview_mail_custom($message, $params, $context, $attachments)) $count++;
+    if (at_ebreview_mail_custom($message, $params, $context, $attachments)) {
+      $count++;
+      $success[] = $account;
+    }
+    else {
+      $failure[] = $account;
+    }
 
     unset($account);
   }
-  drupal_set_message(t('Successfully sent %num emails to invite reviewres', array('%num' => $count)));
+  drupal_set_message(t('Successfully sent %num emails to invite reviewers', array('%num' => $count)));
+  foreach ($success as $account) {
+    drupal_set_message(t('Successfully emailed %user invitation to review', array('%user' => $account->mail)));
+  }
+  foreach ($failure as $account) {
+    drupal_set_message(t('Failed to email %user invitation', array('%user' => $account->mail)), 'error');
+  }
 }
 
 /**

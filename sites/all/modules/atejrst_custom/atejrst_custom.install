@@ -8,4 +8,12 @@ function atejrst_custom_install() {
     ->fields(array('region' => -1))
     ->condition('delta', 'main', '!=')
     ->execute();
+  module_enable(array('at_ebreview'));
+}
+
+/**
+ * Enable the at_review module
+ */
+function atejrst_custom_update_7001(&$sandbox) {
+  module_enable(array('at_ebreview'));
 }
