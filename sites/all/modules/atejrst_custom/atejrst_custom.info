@@ -1,3 +1,5 @@
 name = ATEjrst Custom
 description = Small customization for the site
 core = 7.x
+
+dependencies[] = ctools
